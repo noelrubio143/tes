@@ -323,8 +323,6 @@ cd /usr/bin
 wget -O menu "https://gitlab.com/babayega143/aaa/-/raw/main/menu/menu.sh"
 wget -O m-vless "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-vless.sh"
 wget -O running "https://gitlab.com/babayega143/aaa/-/raw/main/menu/running.sh"
-wget -O clearcache "https://gitlab.com/babayega143/aaa/-/raw/main/menu/clearcache.sh"
-
 # menu ssh ovpn
 wget -O m-sshovpn "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-sshovpn.sh"
 wget -O usernew "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/usernew.sh"
@@ -336,17 +334,12 @@ wget -O m-system "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-system.sh
 wget -O m-domain "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-domain.sh"
 wget -O add-host "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/add-host.sh"
 wget -O certv2ray "https://gitlab.com/babayega143/aaa/-/raw/main/xray/certv2ray.sh"
-wget -O speedtest "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/speedtest_cli.py"
-wget -O auto-reboot "https://gitlab.com/babayega143/aaa/-/raw/main/menu/auto-reboot.sh"
 wget -O restart "https://gitlab.com/babayega143/aaa/-/raw/main/menu/restart.sh"
-wget -O m-tcp "https://gitlab.com/babayega143/aaa/-/raw/main/menu/tcp.sh"
 wget -O xp "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/xp.sh"
-wget -O m-dns "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-dns.sh"
 
 chmod +x menu
 chmod +x m-vless
 chmod +x running
-chmod +x clearcache
 
 chmod +x m-sshovpn
 chmod +x usernew
@@ -357,12 +350,8 @@ chmod +x m-system
 chmod +x m-domain
 chmod +x add-host
 chmod +x certv2ray
-chmod +x speedtest
-chmod +x auto-reboot
 chmod +x restart
-chmod +x m-tcp
 chmod +x xp
-chmod +x m-dns
 cd
 
 
