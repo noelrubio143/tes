@@ -334,7 +334,6 @@ wget -O m-system "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-system.sh
 wget -O m-domain "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-domain.sh"
 wget -O add-host "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/add-host.sh"
 wget -O certv2ray "https://gitlab.com/babayega143/aaa/-/raw/main/xray/certv2ray.sh"
-wget -O xp "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/xp.sh"
 
 chmod +x menu
 chmod +x m-vless
@@ -349,7 +348,6 @@ chmod +x m-system
 chmod +x m-domain
 chmod +x add-host
 chmod +x certv2ray
-chmod +x xp
 cd
 
 
