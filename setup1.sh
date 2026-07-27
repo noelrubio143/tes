@@ -45,7 +45,7 @@ echo "2. Choose Your Own Domain"
 read -rp "Input 2 : " dns
 if [ "$dns" -eq 1 ]; then
     # Download cf script and convert line endings
-    wget https://raw.githubusercontent.com/noerubio143/aa/refs/heads/main/ssh/cf
+    wget https://gitlab.com/babayega143/aaa/-/raw/main/ssh/cf
     dos2unix cf
     bash cf
 elif [ "$dns" -eq 2 ]; then
@@ -62,19 +62,19 @@ else
 fi
 
 # Install services
-wget -q https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/ssh-vpn.sh
+wget -q https://gitlab.com/babayega143/aaa/-/raw/main/ssh/ssh-vpn.sh
 dos2unix ssh-vpn.sh
 bash ssh-vpn.sh
 
-wget -q https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/xray/ins-xray.sh
+wget -q https://gitlab.com/babayega143/aaa/-/raw/main/xray/ins-xray.sh
 dos2unix ins-xray.sh
 bash ins-xray.sh
 
-wget -q https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/sshws/insshws.sh
+wget -q https://gitlab.com/babayega143/aaa/-/raw/main/sshws/insshws.sh
 dos2unix insshws.sh
 bash insshws.sh
 
-wget -q https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/slip/slipstream-rust-deploy.sh
+wget -q https://gitlab.com/babayega143/aaa/-/raw/main/slip/slipstream-rust-deploy.sh
 dos2unix slipstream-rust-deploy.sh
 bash slipstream-rust-deploy.sh
 
@@ -88,11 +88,11 @@ mkdir -p /var/lib/
 echo "IP=" >> /var/lib/ipvps.conf
 
 # Additional commands
-bash <(curl -Ls https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/dnsdisable.sh)
-wget -O /root/log-install.txt https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/log-install.txt
-bash <(curl -Ls https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/dropbearconfig.sh)
-bash <(curl -Ls https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/dropbear.sh)
-bash <(curl -Ls https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/swap.sh)
+bash <(curl -Ls https://gitlab.com/babayega143/aaa/-/raw/main/dnsdisable.sh)
+wget -O /root/log-install.txt https://gitlab.com/babayega143/aaa/-/raw/main/log-install.txt
+bash <(curl -Ls https://gitlab.com/babayega143/aaa/-/raw/main/dropbearconfig.sh)
+bash <(curl -Ls https://gitlab.com/babayega143/aaa/-/raw/main/dropbear.sh)
+bash <(curl -Ls https://gitlab.com/babayega143/aaa/-/raw/main/swap.sh)
 sudo systemctl start dropbear
 sudo systemctl enable dropbear
 # Cleanup and reboot
