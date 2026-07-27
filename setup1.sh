@@ -41,15 +41,7 @@ if ! python --version 2>&1 | grep -q "Python 2.7"; then
 fi
 
 # Domain configuration
-echo "1. Use Our AMBERVPN Domain Random"
-echo "2. Choose Your Own Domain"
-read -rp "Input 1 or 2: " dns
-if [ "$dns" -eq 1 ]; then
-    # Download cf script and convert line endings
-    wget https://gitlab.com/babayega143/aaa/-/raw/main/ssh/cf
-    dos2unix cf
-    bash cf
-elif [ "$dns" -eq 2 ]; then
+echo "USE Your Own Domain"    
     read -rp "Enter Your Domain: " dom
     echo "$dom" > /var/lib/ipvps.conf
     echo "$dom" > /root/scdomain
