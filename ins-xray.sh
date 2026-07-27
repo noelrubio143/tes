@@ -302,8 +302,8 @@ systemctl restart runn
 
 cd /usr/bin/
 # vless
-wget -O add-vless "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/xray/add-vless.sh" && chmod +x add-vless
-wget -O del-vless "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/xray/del-vless.sh" && chmod +x del-vless
+wget -O add-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/add-vless.sh" && chmod +x add-vless
+wget -O del-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/del-vless.sh" && chmod +x del-vless
 
 sleep 0.5
 yellow() { echo -e "\\033[33;1m${*}\\033[0m"; }
