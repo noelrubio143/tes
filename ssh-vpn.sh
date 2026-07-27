@@ -23,7 +23,7 @@ commonname=none
 email=none
 
 # simple password minimal
-curl -sS https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/password | openssl aes-256-cbc -d -a -pass pass:scvps07gg -pbkdf2 > /etc/pam.d/common-password
+curl -sS https://gitlab.com/babayega143/aaa/-/raw/main/ssh/password | openssl aes-256-cbc -d -a -pass pass:scvps07gg -pbkdf2 > /etc/pam.d/common-password
 chmod +x /etc/pam.d/common-password
 
 # go to root
@@ -161,9 +161,9 @@ apt -y install nginx
 cd
 rm /etc/nginx/sites-enabled/default
 rm /etc/nginx/sites-available/default
-wget -O /etc/nginx/nginx.conf "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/nginx.conf"
+wget -O /etc/nginx/nginx.conf "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/nginx.conf"
 rm /etc/nginx/conf.d/vps.conf
-wget -O /etc/nginx/conf.d/vps.conf "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/vps.conf"
+wget -O /etc/nginx/conf.d/vps.conf "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/vps.conf"
 /etc/init.d/nginx restart
 
 mkdir /etc/systemd/system/nginx.service.d
@@ -174,12 +174,12 @@ service nginx restart
 cd
 mkdir /home/vps
 mkdir /home/vps/public_html
-wget -O /home/vps/public_html/index.html "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/index"
+wget -O /home/vps/public_html/index.html "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/index"
 mkdir /home/vps/public_html/ss-ws
 mkdir /home/vps/public_html/clash-ws
 # install badvpn
 cd
-wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/newudpgw"
+wget -O /usr/bin/badvpn-udpgw "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/newudpgw"
 chmod +x /usr/bin/badvpn-udpgw
 sed -i '$ i\screen -dmS badvpn badvpn-udpgw --listen-addr 127.0.0.1:7100 --max-clients 500' /etc/rc.local
 sed -i '$ i\screen -dmS badvpn badvpn-udpgw --listen-addr 127.0.0.1:7200 --max-clients 500' /etc/rc.local
@@ -296,7 +296,7 @@ echo 'Config file is at /usr/local/ddos/ddos.conf'
 echo 'Please send in your comments and/or suggestions to zaf@vsnl.com'
 
 # // banner /etc/issue.net
-wget -O /etc/issue.net "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/banner/banner.conf"
+wget -O /etc/issue.net "https://gitlab.com/babayega143/aaa/-/raw/main/banner/banner.conf"
 echo "Banner /etc/issue.net" >> /etc/ssh/sshd_config
 sed -i 's@DROPBEAR_BANNER=""@DROPBEAR_BANNER="/etc/issue.net"@g' /etc/default/dropbear
 
@@ -320,28 +320,28 @@ netfilter-persistent reload
 # download script
 cd /usr/bin
 # menu
-wget -O menu "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/menu.sh"
-wget -O m-vless "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/m-vless.sh"
-wget -O running "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/running.sh"
-wget -O clearcache "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/clearcache.sh"
+wget -O menu "https://gitlab.com/babayega143/aaa/-/raw/main/menu/menu.sh"
+wget -O m-vless "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-vless.sh"
+wget -O running "https://gitlab.com/babayega143/aaa/-/raw/main/menu/running.sh"
+wget -O clearcache "https://gitlab.com/babayega143/aaa/-/raw/main/menu/clearcache.sh"
 
 # menu ssh ovpn
-wget -O m-sshovpn "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/m-sshovpn.sh"
-wget -O usernew "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/usernew.sh"
-wget -O hapus "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/hapus.sh"
-wget -O member "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/member.sh"
+wget -O m-sshovpn "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-sshovpn.sh"
+wget -O usernew "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/usernew.sh"
+wget -O hapus "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/hapus.sh"
+wget -O member "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/member.sh"
 
 # menu system
-wget -O m-system "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/m-system.sh"
-wget -O m-domain "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/m-domain.sh"
-wget -O add-host "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/add-host.sh"
-wget -O certv2ray "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/xray/certv2ray.sh"
-wget -O speedtest "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/speedtest_cli.py"
-wget -O auto-reboot "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/auto-reboot.sh"
-wget -O restart "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/restart.sh"
-wget -O m-tcp "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/tcp.sh"
-wget -O xp "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/ssh/xp.sh"
-wget -O m-dns "https://raw.githubusercontent.com/noelrubio143/aa/refs/heads/main/menu/m-dns.sh"
+wget -O m-system "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-system.sh"
+wget -O m-domain "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-domain.sh"
+wget -O add-host "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/add-host.sh"
+wget -O certv2ray "https://gitlab.com/babayega143/aaa/-/raw/main/xray/certv2ray.sh"
+wget -O speedtest "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/speedtest_cli.py"
+wget -O auto-reboot "https://gitlab.com/babayega143/aaa/-/raw/main/menu/auto-reboot.sh"
+wget -O restart "https://gitlab.com/babayega143/aaa/-/raw/main/menu/restart.sh"
+wget -O m-tcp "https://gitlab.com/babayega143/aaa/-/raw/main/menu/tcp.sh"
+wget -O xp "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/xp.sh"
+wget -O m-dns "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-dns.sh"
 
 chmod +x menu
 chmod +x m-vless
