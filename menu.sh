@@ -23,8 +23,9 @@ show_vps_info() {
     IPVPS=$(curl -s ifconfig.me)
     LOC=$(curl -sS "https://api.country.is/${IPVPS}" | jq -r '.country')
     if [ -z "$LOC" ]; then
-        LOC="Unknown"
+        LOC="Unknown"      
     fi
+    
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
     echo -e "\e[1;34m                     AMBER VPN VIP SCRIPT                   \e[0m"
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
