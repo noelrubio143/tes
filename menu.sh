@@ -37,19 +37,6 @@ show_vps_info() {
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
 }
 
-# PORTS
-    echo -e "\e[1;33m -------------------------------------------------\e[0m"
-    echo -e "\e[1;34m                     AMBER VPN PORTS                    \e[0m"
-    echo -e "\e[1;33m -------------------------------------------------\e[0m"
-    echo -e "\e[1;32m \e[0m: OPEN SSH 22"
-    echo -e "\e[1;32m \e[0m: SSH WS 80"
-    echo -e "\e[1;32m \e[0m: SSH WS TLS 443"
-    echo -e "\e[1;32m \e[0m: SSH TLS 2096,222,777"
-    echo -e "\e[1;32m \e[0m: XRAY WS NON TLS 80"
-    echo -e "\e[1;32m \e[0m: XRAY WS TLS 443" 
-    echo -e "\e[1;33m -------------------------------------------------\e[0m"
-}
-
 # Function to display CPU and RAM information
 show_cpu_ram_info() {
     get_ram_info
