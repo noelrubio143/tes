@@ -25,9 +25,8 @@ show_vps_info() {
     if [ -z "$LOC" ]; then
         LOC="Unknown"
     fi
-
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
-    echo -e "\e[1;34m                     SENSI VIP AIO                    \e[0m"
+    echo -e "\e[1;34m                     AMBER VPN VIP SCRIPT                   \e[0m"
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
     echo -e "\e[1;32m OS            \e[0m: $(hostnamectl | grep "Operating System" | cut -d ' ' -f5-)"
     echo -e "\e[1;32m Uptime        \e[0m: $uptime"
@@ -38,12 +37,25 @@ show_vps_info() {
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
 }
 
+# PORTS
+    echo -e "\e[1;33m -------------------------------------------------\e[0m"
+    echo -e "\e[1;34m                     AMBER VPN PORTS                    \e[0m"
+    echo -e "\e[1;33m -------------------------------------------------\e[0m"
+    echo -e "\e[1;32m \e[0m: OPEN SSH 22"
+    echo -e "\e[1;32m \e[0m: SSH WS 80"
+    echo -e "\e[1;32m \e[0m: SSH WS TLS 443"
+    echo -e "\e[1;32m \e[0m: SSH TLS 2096,222,777"
+    echo -e "\e[1;32m \e[0m: XRAY WS NON TLS 80"
+    echo -e "\e[1;32m \e[0m: XRAY WS TLS 443" 
+    echo -e "\e[1;33m -------------------------------------------------\e[0m"
+}
+
 # Function to display CPU and RAM information
 show_cpu_ram_info() {
     get_ram_info
     get_cpu_usage
 
-    echo -e "\e[1;34m                   SENSI CPU/RAM INFO                  \e[0m"
+    echo -e "\e[1;34m                   AMBER VPN CPU/RAM INFO                  \e[0m"
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
     echo -e "\e[1;32m CPU USAGE   \e[0m: $cpu_usage"
     echo -e "\e[1;32m RAM USED    \e[0m: ${uram} MB"
@@ -57,7 +69,7 @@ show_menu() {
     show_vps_info
     show_cpu_ram_info
 
-    echo -e "\e[1;34m                      SENSI MENU                       \e[0m"
+    echo -e "\e[1;34m                      AMBER VPN MENU                       \e[0m"
     echo -e "\e[1;33m -------------------------------------------------\e[0m"
     echo -e ""
     echo -e "\e[1;36m 1 \e[0m: Menu SSH"
