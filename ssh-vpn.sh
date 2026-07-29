@@ -322,7 +322,10 @@ cd /usr/bin
 # menu
 wget -O menu "https://gitlab.com/babayega143/aaa/-/raw/main/menu/menu.sh"
 wget -O m-vless "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-vless.sh"
+wget -O m-vmess "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-vmess.sh"
+wget -O m-trojan "https://gitlab.com/babayega143/aaa/-/raw/main/menu/trojan.sh"
 wget -O running "https://gitlab.com/babayega143/aaa/-/raw/main/menu/running.sh"
+
 # menu ssh ovpn
 wget -O m-sshovpn "https://gitlab.com/babayega143/aaa/-/raw/main/menu/m-sshovpn.sh"
 wget -O usernew "https://gitlab.com/babayega143/aaa/-/raw/main/ssh/usernew.sh"
@@ -337,6 +340,8 @@ wget -O certv2ray "https://gitlab.com/babayega143/aaa/-/raw/main/xray/certv2ray.
 
 chmod +x menu
 chmod +x m-vless
+chmod +x m-vmess
+chmod +x m-trojan
 chmod +x running
 
 chmod +x m-sshovpn
