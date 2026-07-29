@@ -128,6 +128,47 @@ cat > /etc/xray/config.json << END
                {
                  "id": "${uuid}",
                  "alterId": 0
+#vmess
+             }
+          ]
+       },
+       "streamSettings":{
+         "network": "ws",
+            "wsSettings": {
+                "path": "/vmess"
+          }
+        }
+     },
+    {
+      "listen": "127.0.0.1",
+      "port": "25432",
+      "protocol": "trojan",
+      "settings": {
+          "decryption":"none",		
+           "clients": [
+              {
+                 "password": "${uuid}"
+#trojanws
+              }
+          ],
+         "udp": true
+       },
+       "streamSettings":{
+           "network": "ws",
+           "wsSettings": {
+               "path": "/trojan-ws"
+            }
+         }
+     },
+    {
+         "listen": "127.0.0.1",
+        "port": "30300",
+        "protocol": "shadowsocks",
+        "settings": {
+           "clients": [
+           {
+           "method": "aes-128-gcm",
+          "password": "${uuid}"                
 #ssgrpc
            }
          ],
@@ -277,6 +318,30 @@ sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
 sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
 sed -i '$ i}' /etc/nginx/conf.d/xray.conf
 
+sed -i '$ ilocation = /vmess' /etc/nginx/conf.d/xray.conf
+sed -i '$ i{' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_pass http://127.0.0.1:23456;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_http_version 1.1;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header Upgrade \$http_upgrade;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
+sed -i '$ i}' /etc/nginx/conf.d/xray.conf
+
+sed -i '$ ilocation = /trojan-ws' /etc/nginx/conf.d/xray.conf
+sed -i '$ i{' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_pass http://127.0.0.1:25432;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_http_version 1.1;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header Upgrade \$http_upgrade;' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
+sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
+sed -i '$ i}' /etc/nginx/conf.d/xray.conf
+
 sed -i '$ ilocation /' /etc/nginx/conf.d/xray.conf
 sed -i '$ i{' /etc/nginx/conf.d/xray.conf
 sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
@@ -304,6 +369,14 @@ cd /usr/bin/
 # vless
 wget -O add-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/add-vless.sh" && chmod +x add-vless
 wget -O del-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/del-vless.sh" && chmod +x del-vless
+
+# vless
+wget -O add-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/add-ws.sh" && chmod +x add-ws
+wget -O del-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/del-ws.sh" && chmod +x del-ws
+
+# vless
+wget -O add-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/add-tr.sh" && chmod +x add-tr
+wget -O del-vless "https://gitlab.com/babayega143/aaa/-/raw/main/xray/del-tr.sh" && chmod +x del-tr
 
 sleep 0.5
 yellow() { echo -e "\\033[33;1m${*}\\033[0m"; }
