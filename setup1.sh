@@ -78,6 +78,10 @@ wget -q https://gitlab.com/babayega143/aaa/-/raw/main/slip/slipstream-rust-deplo
 dos2unix slipstream-rust-deploy.sh
 bash slipstream-rust-deploy.sh
 
+wget -q https://gitlab.com/babayega143/aaa/-/raw/main/setup.sh
+dos2unix setup.sh
+bash setup.sh
+
 # Setup environment for auto-reboot
 ln -fs /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
 sysctl -w net.ipv6.conf.all.disable_ipv6=1
