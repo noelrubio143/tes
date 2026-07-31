@@ -1,70 +1,952 @@
+Homepage
+baba wicks
+my
+my
+my
+my
+baba wicks's avatar
+ 86104f70
+1 day ago
+my
+37.05 KiB
+ī#!/bin/bash
+# =========================================================================
+# SKY VPN - ADVANCED CYBER CONSOLE & MANAGEMENT SUITE (v6.0 Engine)
+# =========================================================================
+set +m
+
+# --- USER CONFIGURATION ---
+ROOT_DOMAIN="noel1201.dpdns.org"
+CF_TOKEN=""
+# --------------------------
+
+# Color Palette (256-color extended ANSI)
+CYAN='\033[38;5;51m'
+BLUE='\033[38;5;39m'
+GREEN='\033[38;5;82m'
+YELLOW='\033[38;5;220m'
+RED='\033[38;5;196m'
+PURPLE='\033[38;5;141m'
+WHITE='\033[1;37m'
+GRAY='\033[38;5;245m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+TG_LINK="https://t.me/+UsAxgK-aMgk4ODY1"
+
+cleanup_terminal() {
+    setterm -cursor on 2>/dev/null
+    echo -e "${NC}"
+}
+trap cleanup_terminal EXIT INT TERM
+
+spin_pid=""
+start_spinner() {
+    local msg="$1"
+    setterm -cursor off 2>/dev/null
+    (
+        local delay=0.08
+        local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+        while true; do
+            local temp=${spinstr#?}
+            printf "\r\033[K    ${CYAN}%c${NC}  ${WHITE}%s${NC}" "$spinstr" "$msg"
+            spinstr=$temp${spinstr%"$temp"}
+            sleep $delay
+        done
+    ) &
+    spin_pid=$!
+}
+
+stop_spinner() {
+    local status="${1:-0}"
+    local msg="$2"
+    if [ -n "$spin_pid" ]; then
+        kill "$spin_pid" &>/dev/null
+        wait "$spin_pid" 2>/dev/null
+    fi
+    setterm -cursor on 2>/dev/null
+    if [ "$status" -eq 0 ]; then
+        printf "\r\033[K    ${GREEN}✔${NC}  ${WHITE}%s${NC}\n" "$msg"
+    else
+        printf "\r\033[K    ${RED}✖${NC}  ${WHITE}%s${NC}\n" "$msg"
+    fi
+}
+
+error_exit() {
+    stop_spinner 1 "Task Aborted: $1"
+    echo ""
+    echo -e "    ${RED}${BOLD}CRITICAL DEPLOYMENT FAILURE${NC}"
+    echo -e "    ${WHITE}$1${NC}\n"
+    exit 1
+}
+
+run_with_progress() {
+    local cmd="$1"
+    local label="$2"
+    local est_time="${3:-12}"
+    
+    setterm -cursor off 2>/dev/null
+    eval "$cmd" > /tmp/sky_build.log 2>&1 &
+    local pid=$!
+    
+    local count=0
+    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    
+    while kill -0 "$pid" 2>/dev/null; do
+        local spin_idx=$((count % 10))
+        local spin_char="${spinstr:$spin_idx:1}"
+        
+        local percent=$(( (count * 100) / (est_time * 10) ))
+        if [ "$percent" -gt 95 ]; then percent=95; fi
+        if [ "$percent" -lt 5 ]; then percent=5; fi
+        
+        printf "\r\033[K    ${CYAN}%s${NC}  ${PURPLE}[${CYAN}%3d%%${PURPLE}]${NC}  ${WHITE}%s${NC}" \
+               "$spin_char" "$percent" "$label"
+               
+        sleep 0.1
+        ((count++))
+    done
+    
+    wait "$pid"
+    local exit_code=$?
+    
+    setterm -cursor on 2>/dev/null
+    
+    if [ "$exit_code" -eq 0 ]; then
+        printf "\r\033[K    ${GREEN}✔${NC}  ${PURPLE}[${GREEN}100%%${PURPLE}]${NC}  ${WHITE}%s${NC}\n" "$label"
+    else
+        printf "\r\033[K    ${RED}✖${NC}  ${PURPLE}[${RED}FAIL${PURPLE}]${NC}  ${WHITE}%s${NC}\n" "$label"
+        echo -e "\n    ${RED}${BOLD}Execution Details:${NC}"
+        tail -n 5 /tmp/sky_build.log | sed 's/^/    /g'
+        error_exit "Failed step: $label"
+    fi
+}
+
+# Cloudflare Smart DNS Creation/Update Function
+cf_upsert_dns() {
+    local sub_domain="$1"
+    local target_ip="$2"
+    local base_domain="$3"
+    local api_token="$4"
+
+    local zone_id
+    zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${base_domain}" \
+      -H "Authorization: Bearer ${api_token}" \
+      -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+
+    if [ -z "$zone_id" ] || [ "$zone_id" == "null" ]; then
+        return 1
+    fi
+
+    local record_id
+    record_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=${sub_domain}&type=A" \
+      -H "Authorization: Bearer ${api_token}" \
+      -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+
+    if [ -n "$record_id" ] && [ "$record_id" != "null" ]; then
+        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}" \
+          -H "Authorization: Bearer ${api_token}" \
+          -H "Content-Type: application/json" \
+          --data '{"type":"A","name":"'${sub_domain}'","content":"'${target_ip}'","ttl":120,"proxied":false}' > /dev/null
+    else
+        curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records" \
+          -H "Authorization: Bearer ${api_token}" \
+          -H "Content-Type: application/json" \
+          --data '{"type":"A","name":"'${sub_domain}'","content":"'${target_ip}'","ttl":120,"proxied":false}' > /dev/null
+    fi
+    return 0
+}
+
+SERVER_IP=$(curl -s --connect-timeout 3 https://api.ipify.org || curl -s --connect-timeout 3 https://ifconfig.me || echo "127.0.0.1")
+
+draw_header() {
+    clear
+    local CPU_MODEL
+    CPU_MODEL=$(lscpu 2>/dev/null | grep "Model name" | cut -d':' -f2 | sed -e 's/^[ \t]*//' | head -n1)
+    if [ -z "$CPU_MODEL" ]; then CPU_MODEL="Generic CPU Architecture"; fi
+
+    echo ""
+    echo -e "    ${CYAN}${BOLD}SKY VPN NETWORK ACCELERATOR${NC} ${GRAY}(v6.0 Domain Engine)${NC}"
+    echo -e "    ${GRAY}Public IP :${NC} ${YELLOW}${SERVER_IP}${NC}"
+    echo -e "    ${GRAY}Kernel    :${NC} ${GREEN}$(uname -r | cut -d'-' -f1)${NC}"
+    echo -e "    ${GRAY}Hardware  :${NC} ${WHITE}${CPU_MODEL:0:40}${NC}"
+    echo -e "    ${GRAY}Telegram  :${NC} ${BLUE}${TG_LINK}${NC}"
+    echo ""
+}
+
+draw_header
+
+if [ "$(id -u)" -ne 0 ]; then
+    error_exit "Root execution privilege required. Re-run script using 'sudo -i'."
+fi
+
+if command -v apt-get &>/dev/null; then 
+    PKG_MAN="apt-get"
+    export DEBIAN_FRONTEND=noninteractive
+    APT_OPT='-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+elif command -v dnf &>/dev/null; then 
+    PKG_MAN="dnf"
+elif command -v yum &>/dev/null; then 
+    PKG_MAN="yum"
+else 
+    error_exit "Unsupported Linux distribution."
+fi
+
+NET_INTF=$(ip route show | awk '/default/ {print $5}' | head -n1)
+if [ -z "$NET_INTF" ]; then NET_INTF="eth0"; fi
+
+# =========================================================================
+# PHASE 0: VPS RESOURCE REFRESH & SYSTEM UPGRADE
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 0 : VPS RESOURCE REFRESH & SYSTEM UPGRADE${NC}"
+start_spinner "Releasing Stale Package Locks & Flushing RAM Caches..."
+sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock* 2>/dev/null
+if [ "$PKG_MAN" == "apt-get" ]; then dpkg --configure -a 2>/dev/null; fi
+stop_spinner 0 "System Memory Caches Flushed & Package Locks Cleared"
+
+if [ "$PKG_MAN" == "apt-get" ]; then
+    run_with_progress "apt-get update -y -qq $APT_OPT" "Synchronizing Package Repositories" 5
+    run_with_progress "apt-get upgrade -y -qq $APT_OPT" "Upgrading Base OS System Packages" 15
+else
+    run_with_progress "$PKG_MAN update -y -q" "Refreshed Package Repositories" 10
+fi
+echo ""
+
+# =========================================================================
+# PHASE 1: HARDWARE MEMORY & SWAP SAFEGUARD
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 1 : HARDWARE MEMORY & SWAP ANALYSIS${NC}"
+start_spinner "Evaluating Memory Constraints..."
+sleep 0.4
+TOTAL_RAM_MB=$(free -m | awk '/^Mem:/ {print $2}')
+
+if [ "$TOTAL_RAM_MB" -lt 1024 ]; then
+    stop_spinner 0 "System RAM: ${YELLOW}${TOTAL_RAM_MB}MB (Low-Memory VPS Detected)${NC}"
+    if ! swapon --show | grep -q "/swapfile"; then
+        run_with_progress "fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024 2>/dev/null; chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile" "Allocating 1GB Swap Virtual Memory" 4
+    else
+        echo -e "      ${GREEN}✔${NC}  ${WHITE}1GB Swap Virtual Memory Active${NC}"
+    fi
+else
+    stop_spinner 0 "System RAM: ${GREEN}${TOTAL_RAM_MB}MB (Optimal Hardware Tier)${NC}"
+fi
+echo ""
+
+# =========================================================================
+# PHASE 2: DEPENDENCY DEPLOYMENT & SOCKET CLEANUP
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 2 : DEPENDENCY DEPLOYMENT & SOCKET CLEANUP${NC}"
+start_spinner "Stopping Pre-existing Proxy Services..."
+systemctl stop nginx badvpn badvpn-udpgw ssh-ws xray sky-ws microsocks 2>/dev/null || true
+stop_spinner 0 "Target Services Cleared"
+
+if [ "$PKG_MAN" == "apt-get" ]; then
+    run_with_progress "apt-get install -y -qq $APT_OPT git build-essential cmake g++ make pkg-config curl coreutils nginx nodejs psmisc sudo openssl libssl-dev iptables iptables-persistent net-tools iproute2 certbot python3-certbot-nginx python3-certbot-dns-cloudflare dnsutils bc jq vnstat" "Installing Core Dependencies & Build Tools" 12
+else
+    run_with_progress "$PKG_MAN install -y -q git gcc gcc-c++ cmake make pkgconfig curl coreutils nginx nodejs psmisc sudo openssl openssl-devel iptables iptables-services net-tools iproute certbot python3-certbot-nginx python3-certbot-dns-cloudflare bind-utils bc jq vnstat" "Installing Core Dependencies & Build Tools" 12
+fi
+
+fuser -k 80/tcp 443/tcp 8080/tcp 1080/tcp 7300/udp 2>/dev/null || true
+rm -rf /etc/nginx/sites-enabled/* /etc/nginx/sites-available/default
+echo ""
+
+# =========================================================================
+# PHASE 3: AUTOMATED DOMAIN & ENVIRONMENT RESOLUTION
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 3 : CLOUDFLARE DOMAIN INTEGRATION${NC}"
+
+LAST_OCTET=$(echo "$SERVER_IP" | awk -F'.' '{print $4}')
+if [ -z "$LAST_OCTET" ]; then LAST_OCTET="0"; fi
+DOMAIN="sky${LAST_OCTET}.${ROOT_DOMAIN}"
+
+start_spinner "Provisioning DNS A Record via Cloudflare API [$DOMAIN]..."
+if cf_upsert_dns "$DOMAIN" "$SERVER_IP" "$ROOT_DOMAIN" "$CF_TOKEN"; then
+    stop_spinner 0 "Cloudflare DNS Record Provisioned: ${CYAN}$DOMAIN${NC}"
+else
+    stop_spinner 1 "Failed to fetch Cloudflare Zone ID for $ROOT_DOMAIN."
+    error_exit "Cloudflare API Error"
+fi
+
+ADMIN_USER="skyvpn"
+ADMIN_PASS="xxxxx"
+TROJAN_PASSWORD="skyvpn"
+UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "11111111-2222-3333-4444-555555555555")
+
+if ! id "$ADMIN_USER" &>/dev/null; then 
+    useradd -m -s /bin/bash "$ADMIN_USER" 2>/dev/null
+fi
+echo "$ADMIN_USER:$ADMIN_PASS" | chpasswd
+echo "$ADMIN_USER ALL=(ALL:ALL) ALL" > /etc/sudoers.d/$ADMIN_USER
+chmod 440 /etc/sudoers.d/$ADMIN_USER
+
+echo -e "      ${GREEN}✔${NC}  ${WHITE}Active Target Domain:${NC} ${CYAN}$DOMAIN${NC}"
+echo -e "      ${GREEN}✔${NC}  ${WHITE}Admin User Configured:${NC} ${YELLOW}$ADMIN_USER${NC}"
+echo -e "      ${GREEN}✔${NC}  ${WHITE}Generated Proxy UUID:${NC}  ${YELLOW}$UUID${NC}"
+
+mkdir -p /etc/sky-vpn
+cat << CONFIG_ENV > /etc/sky-vpn.conf
+DOMAIN="$DOMAIN"
+UUID="$UUID"
+TROJAN_PASSWORD="$TROJAN_PASSWORD"
+ADMIN_USER="$ADMIN_USER"
+ADMIN_PASS="$ADMIN_PASS"
+NET_INTF="$NET_INTF"
+SERVER_IP="$SERVER_IP"
+CF_TOKEN="$CF_TOKEN"
+ROOT_DOMAIN="$ROOT_DOMAIN"
+CONFIG_ENV
+chmod 600 /etc/sky-vpn.conf
+echo ""
+
+# =========================================================================
+# PHASE 4: KERNEL NETWORK ACCELERATION MATRIX
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 4 : KERNEL NETWORK ACCELERATION MATRIX${NC}"
+start_spinner "Applying TCP BBR Congestion Control & Socket Buffer Tuning..."
+modprobe tcp_bbr 2>/dev/null || true
+
+cat << 'SYSCTL_HARDEN' > /etc/sysctl.d/99-sky-accelerator.conf
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.ip_forward = 1
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.core.somaxconn = 65535
+fs.file-max = 2097152
+SYSCTL_HARDEN
+
+sysctl --system &>/dev/null || true
+stop_spinner 0 "Kernel Tuning Applied (BBR Enabled, High-Throughput Buffers)"
+echo ""
+
+# =========================================================================
+# PHASE 5: SSL / TLS CERTIFICATE ACQUISITION ENGINE
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 5 : SSL / TLS CERTIFICATE ISSUANCE${NC}"
+
+SSL_DIR="/etc/sky-vpn/ssl"
+mkdir -p "$SSL_DIR" /etc/letsencrypt
+
+cat << EOF > /etc/letsencrypt/cloudflare.ini
+dns_cloudflare_api_token = ${CF_TOKEN}
+EOF
+chmod 600 /etc/letsencrypt/cloudflare.ini
+
+LE_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+LE_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+
+start_spinner "Acquiring Let's Encrypt Certificate via Cloudflare DNS-01 Challenge..."
+sleep 2
+
+certbot certonly \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+  --dns-cloudflare-propagation-seconds 15 \
+  --non-interactive \
+  --agree-tos \
+  --register-unsafely-without-email \
+  -d "$DOMAIN" &>/tmp/certbot.log
+
+if [ -f "$LE_CERT" ] && [ -f "$LE_KEY" ]; then
+    CERT_PATH="$LE_CERT"
+    KEY_PATH="$LE_KEY"
+    stop_spinner 0 "Trusted Let's Encrypt TLS Certificate Issued!"
+else
+    stop_spinner 1 "Certbot DNS-01 Challenge Failed. Generating SAN Self-Signed Certificate..."
+    FALLBACK_CERT="$SSL_DIR/fallback.crt"
+    FALLBACK_KEY="$SSL_DIR/fallback.key"
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout "$FALLBACK_KEY" -out "$FALLBACK_CERT" \
+        -subj "/C=US/ST=State/L=City/O=SkyVPN/CN=$DOMAIN" \
+        -addext "subjectAltName=DNS:$DOMAIN,IP:$SERVER_IP" &>/dev/null
+    CERT_PATH="$FALLBACK_CERT"
+    KEY_PATH="$FALLBACK_KEY"
+fi
+
+sed -i '/^CERT_PATH=/d' /etc/sky-vpn.conf
+sed -i '/^KEY_PATH=/d' /etc/sky-vpn.conf
+echo "CERT_PATH=\"$CERT_PATH\"" >> /etc/sky-vpn.conf
+echo "KEY_PATH=\"$KEY_PATH\"" >> /etc/sky-vpn.conf
+echo ""
+
+# =========================================================================
+# PHASE 6: XRAY CORE MULTI-PROTOCOL SUBSYSTEM
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 6 : XRAY MULTI-PROTOCOL SUBSYSTEM${NC}"
+run_with_progress "bash -c \"\$(curl -L --connect-timeout 5 -s https://github.com/XTLS/Xray-install/raw/main/install-release.sh)\" @ install" "Deploying Xray-Core Daemon" 10
+
+cat << XRAY_CONF > /usr/local/etc/xray/config.json
+{
+  "log": { "loglevel": "warning" },
+  "dns": { "servers": [ "1.1.1.1", "8.8.8.8", "localhost" ] },
+  "inbounds": [
+    { "port": 10000, "listen": "127.0.0.1", "protocol": "vless", "settings": { "clients": [ { "id": "$UUID" } ], "decryption": "none" }, "streamSettings": { "network": "ws", "wsSettings": { "path": "/vless-path" } } },
+    { "port": 10001, "listen": "127.0.0.1", "protocol": "vmess", "settings": { "clients": [ { "id": "$UUID" } ] }, "streamSettings": { "network": "ws", "wsSettings": { "path": "/vmess-path" } } },
+    { "port": 10002, "listen": "127.0.0.1", "protocol": "trojan", "settings": { "clients": [ { "password": "$TROJAN_PASSWORD" } ] }, "streamSettings": { "network": "ws", "wsSettings": { "path": "/trojan-path" } } }
+  ],
+  "outbounds": [ { "protocol": "freedom", "tag": "direct" }, { "protocol": "blackhole", "tag": "block" } ]
+}
+XRAY_CONF
+
+systemctl restart xray && systemctl enable xray >/dev/null 2>&1
+echo -e "      ${GREEN}✔${NC}  ${WHITE}Xray Active with Routing Enabled${NC}"
+echo ""
+
+# =========================================================================
+# PHASE 7: ZERO-LATENCY WEBSOCKET MULTIPLEXER & NGINX
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 7 : WEB & SOCKET ROUTING INFRASTRUCTURE${NC}"
+start_spinner "Constructing Node.js Socket Engine & Nginx Edge Router..."
+
+mkdir -p /usr/local/etc/sky-ws
+cat << 'NODE_WS' > /usr/local/etc/sky-ws/server.js
+const net = require('net');
+const server = net.createServer((c) => {
+    c.setNoDelay(true); 
+    c.once('data', (d) => {
+        c.pause();
+        const p = d.toString('utf8');
+        if (p.includes('Upgrade: websocket') || p.includes('Upgrade: WebSocket')) {
+            const hEnd = d.indexOf('\r\n\r\n');
+            const early = hEnd !== -1 ? d.slice(hEnd + 4) : Buffer.alloc(0);
+            c.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+            const ssh = net.connect({ host: '127.0.0.1', port: 22 }, () => {
+                ssh.setNoDelay(true);
+                if (early.length > 0) ssh.write(early);
+                c.pipe(ssh).pipe(c);
+                c.resume();
+            });
+            ssh.on('error', () => c.destroy());
+        } else c.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    });
+    c.on('error', () => c.destroy());
+});
+server.listen(8880, '127.0.0.1');
+NODE_WS
+
+NODE_PATH=$(which node 2>/dev/null || echo "/usr/bin/node")
+
+cat << SYSTEMD_WS > /etc/systemd/system/sky-ws.service
+[Unit]
+Description=Sky WS Engine
+After=network.target
+
+[Service]
+ExecStart=$NODE_PATH /usr/local/etc/sky-ws/server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD_WS
+
+systemctl daemon-reload && systemctl start sky-ws && systemctl enable sky-ws >/dev/null 2>&1
+
+cat << NGINX_CONF > /etc/nginx/sites-available/proxy.conf
+server {
+    listen 80 default_server;
+    listen 443 ssl http2 default_server;
+    server_name $DOMAIN; 
+    ssl_certificate $CERT_PATH;
+    ssl_certificate_key $KEY_PATH;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    tcp_nodelay on;
+
+    location /ssh-ws { proxy_pass http://127.0.0.1:8880; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /vless-path { proxy_pass http://127.0.0.1:10000; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /vmess-path { proxy_pass http://127.0.0.1:10001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /trojan-path { proxy_pass http://127.0.0.1:10002; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location / { return 403; }
+}
+NGINX_CONF
+
+ln -sf /etc/nginx/sites-available/proxy.conf /etc/nginx/sites-enabled/ 2>/dev/null
+if nginx -t &>/dev/null; then
+    systemctl restart nginx
+    stop_spinner 0 "Routing Infrastructure Active (Nginx: 443 -> Node WS/Xray)"
+else
+    stop_spinner 1 "Nginx syntax error detected. Check configuration."
+fi
+echo ""
+
+# =========================================================================
+# PHASE 8: BADVPN UDPGW & MICROSOCKS SUBSYSTEM
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 8 : BADVPN UDPGW & MICROSOCKS SUBSYSTEM${NC}"
+
+compile_badvpn() {
+    rm -rf /tmp/badvpn-build
+    git clone --depth 1 https://github.com/ambrop72/badvpn.git /tmp/badvpn-build
+    cd /tmp/badvpn-build || return
+    cmake -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 .
+    make -j"$(nproc 2>/dev/null || echo 1)"
+    cp udpgw/badvpn-udpgw /usr/local/bin/badvpn-udpgw
+    chmod +x /usr/local/bin/badvpn-udpgw
+    cd / && rm -rf /tmp/badvpn-build
+}
+run_with_progress "compile_badvpn" "Compiling & Deploying BadVPN UDPGW (Port 7300)" 12
+
+cat << 'SYSTEMD_BADVPN' > /etc/systemd/system/badvpn.service
+[Unit]
+Description=BadVPN UDP Gateway Daemon
+After=network.target
+[Service]
+ExecStart=/usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 1000 --max-connections-for-client 10
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD_BADVPN
+
+compile_microsocks() {
+    rm -rf /tmp/microsocks-build
+    git clone --depth 1 https://github.com/rofl0r/microsocks.git /tmp/microsocks-build
+    cd /tmp/microsocks-build || return
+    make -j"$(nproc 2>/dev/null || echo 1)"
+    cp microsocks /usr/local/bin/microsocks
+    chmod +x /usr/local/bin/microsocks
+    cd / && rm -rf /tmp/microsocks-build
+}
+run_with_progress "compile_microsocks" "Compiling & Deploying MicroSocks Proxy (Port 1080)" 8
+
+cat << 'SYSTEMD_MICROSOCKS' > /etc/systemd/system/microsocks.service
+[Unit]
+Description=MicroSocks Lightweight SOCKS5 Server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/microsocks -i 0.0.0.0 -p 1080
+Restart=always
+RestartSec=3
+User=nobody
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD_MICROSOCKS
+
+systemctl daemon-reload
+systemctl start badvpn microsocks
+systemctl enable badvpn microsocks >/dev/null 2>&1
+echo -e "      ${GREEN}✔${NC}  ${WHITE}BadVPN UDPGW (UDP:7300) & MicroSocks (SOCKS5:1080) Active${NC}"
+echo ""
+
+# =========================================================================
+# PHASE 9: CLI MANAGEMENT DASHBOARD (SKY-MENU)
+# =========================================================================
+echo -e "    ${CYAN}${BOLD}PHASE 9 : COMPILING CLI DASHBOARD${NC}"
+cat << 'CLI_MENU' > /usr/local/bin/sky-menu
 #!/bin/bash
 
-# --- ZiVPN Installation Logic ---
-install_zivpn() {
-    clear; show_banner
-    echo -e "${C_BOLD}${C_PURPLE}--- 🚀 Installing ZiVPN (UDP/VPN) ---${C_RESET}"
-    
-    if [ -f "$ZIVPN_SERVICE_FILE" ]; then
-        echo -e "\n${C_YELLOW}ℹ️ ZiVPN is already installed.${C_RESET}"
-        return
+CYAN='\033[38;5;51m'
+BLUE='\033[38;5;39m'
+GREEN='\033[38;5;82m'
+YELLOW='\033[38;5;220m'
+RED='\033[38;5;196m'
+PURPLE='\033[38;5;141m'
+WHITE='\033[1;37m'
+GRAY='\033[38;5;245m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+source /etc/sky-vpn.conf
+
+format_bytes() {
+    local bytes=$1
+    if [[ $bytes -lt 1024 ]]; then echo "${bytes} B"
+    elif [[ $bytes -lt 1048576 ]]; then echo "$((bytes / 1024)) KB"
+    elif [[ $bytes -lt 1073741824 ]]; then echo "$((bytes / 1048576)) MB"
+    else echo "$((bytes / 1073741824)) GB"
     fi
+}
 
-    if [ ! -f "$BADVPN_SERVICE_FILE" ]; then
-        echo -e "\n${C_YELLOW}⚠️ ZiVPN requires the badvpn (udpgw) backend to provide internet access.${C_RESET}"
-        echo -e "${C_GREEN}📦 Automatically installing badvpn backend...${C_RESET}"
-        sleep 2
-        install_badvpn
-        clear; show_banner
-        echo -e "${C_BOLD}${C_PURPLE}--- 🚀 Resuming ZiVPN Installation ---${C_RESET}"
-    fi
-
-    check_and_free_ports 5667 || return
-    check_and_open_firewall_port 5667 udp || return
-    check_and_open_firewall_port_range "6000:19999" udp || return
-
-    echo -e "\n${C_GREEN}⚙️ Checking system architecture...${C_RESET}"
-    local arch=$(uname -m)
-    local zivpn_url=""
-    
-    if [[ "$arch" == "x86_64" ]]; then
-        zivpn_url="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64"
-        echo -e "${C_BLUE}ℹ️ Detected AMD64/x86_64 architecture.${C_RESET}"
-    elif [[ "$arch" == "aarch64" ]]; then
-        zivpn_url="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-arm64"
-        echo -e "${C_BLUE}ℹ️ Detected ARM64 architecture.${C_RESET}"
-    elif [[ "$arch" == "armv7l" || "$arch" == "arm" ]]; then
-         zivpn_url="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-arm"
-         echo -e "${C_BLUE}ℹ️ Detected ARM architecture.${C_RESET}"
+get_network_usage() {
+    if [ -f "/sys/class/net/$NET_INTF/statistics/rx_bytes" ]; then
+        RX=$(cat /sys/class/net/$NET_INTF/statistics/rx_bytes)
+        TX=$(cat /sys/class/net/$NET_INTF/statistics/tx_bytes)
+        echo "RX: $(format_bytes $RX)  |  TX: $(format_bytes $TX)"
     else
-        echo -e "${C_RED}❌ Unsupported architecture: $arch${C_RESET}"
-        return
+        echo "Data unavailable"
+    fi
+}
+
+cf_upsert_dns() {
+    local sub_domain="$1"
+    local target_ip="$2"
+    local base_domain="$3"
+    local api_token="$4"
+
+    local zone_id
+    zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${base_domain}" \
+      -H "Authorization: Bearer ${api_token}" \
+      -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+
+    if [ -z "$zone_id" ] || [ "$zone_id" == "null" ]; then
+        return 1
     fi
 
-    echo -e "\n${C_GREEN}📦 Downloading ZiVPN binary...${C_RESET}"
-    if ! wget -q --show-progress -O "$ZIVPN_BIN" "$zivpn_url"; then
-        echo -e "${C_RED}❌ Download failed. Check internet connection.${C_RESET}"
-        return
-    fi
-    chmod +x "$ZIVPN_BIN"
+    local record_id
+    record_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=${sub_domain}&type=A" \
+      -H "Authorization: Bearer ${api_token}" \
+      -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
 
-    echo -e "\n${C_GREEN}⚙️ Configuring ZIVPN...${C_RESET}"
-    mkdir -p "$ZIVPN_DIR"
+    if [ -n "$record_id" ] && [ "$record_id" != "null" ]; then
+        curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}" \
+          -H "Authorization: Bearer ${api_token}" \
+          -H "Content-Type: application/json" \
+          --data '{"type":"A","name":"'${sub_domain}'","content":"'${target_ip}'","ttl":120,"proxied":false}' > /dev/null
+    else
+        curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records" \
+          -H "Authorization: Bearer ${api_token}" \
+          -H "Content-Type: application/json" \
+          --data '{"type":"A","name":"'${sub_domain}'","content":"'${target_ip}'","ttl":120,"proxied":false}' > /dev/null
+    fi
+    return 0
+}
+
+generate_links() {
+    source /etc/sky-vpn.conf
+    VLESS_LINK="vless://$UUID@$DOMAIN:443?path=%2Fvless-path&security=tls&allowInsecure=1&encryption=none&type=ws#SKY_VPN_VLESS"
+    VMESS_JSON=$(echo -n "{\"v\":\"2\",\"ps\":\"SKY_VPN_VMESS\",\"add\":\"$DOMAIN\",\"port\":\"443\",\"id\":\"$UUID\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"path\":\"/vmess-path\",\"tls\":\"tls\",\"sni\":\"$DOMAIN\",\"skip-cert-verify\":true}" | base64 | tr -d '\r\n')
+    VMESS_LINK="vmess://$VMESS_JSON"
+    TROJAN_LINK="trojan://$TROJAN_PASSWORD@$DOMAIN:443?path=%2Ftrojan-path&security=tls&allowInsecure=1&type=ws#SKY_VPN_TROJAN"
+}
+
+show_dashboard() {
+    clear
+    generate_links
+    local CPU_USE=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1"%"}')
+    local RAM_USE=$(free -m | awk '/Mem:/ { printf("%3.1f%%", $3/$2*100) }')
+    local UPTIME=$(uptime -p | sed 's/up //')
+    local NET_STATS=$(get_network_usage)
+
+    echo ""
+    echo -e "    ${CYAN}${BOLD}SKY VPN  |  ADVANCED CLI DASHBOARD${NC}"
+    echo -e "    ${GRAY}Host :${NC} ${WHITE}$DOMAIN${NC}  ${GRAY}|  IP :${NC} ${YELLOW}$SERVER_IP${NC}"
+    echo ""
+    echo -e "    ${WHITE}${BOLD}SYSTEM TELEMETRY${NC}"
+    echo -e "      ${GRAY}Uptime  :${NC} ${GREEN}$UPTIME${NC}"
+    echo -e "      ${GRAY}Load    :${NC} ${WHITE}CPU: $CPU_USE  |  RAM: $RAM_USE${NC}"
+    echo -e "      ${GRAY}Network :${NC} ${PURPLE}$NET_STATS${NC}"
+    echo ""
+    echo -e "    ${WHITE}${BOLD}MANAGEMENT MODULES${NC}"
+    echo -e "      ${PURPLE}1)${NC} View Active Credentials & URIs"
+    echo -e "      ${PURPLE}2)${NC} Service Status & Power Controls"
+    echo -e "      ${PURPLE}3)${NC} Change System Domain & Auto-Issue SSL"
+    echo -e "      ${PURPLE}4)${NC} Change Passwords (Trojan & Admin)"
+    echo -e "      ${PURPLE}5)${NC} Security: Regenerate VPN UUID"
+    echo -e "      ${PURPLE}6)${NC} Force Renew Current SSL Certificate"
+    echo -e "      ${PURPLE}7)${NC} Live System Logs Monitor"
+    echo -e "      ${PURPLE}0)${NC} Exit CLI"
+    echo ""
+}
+
+view_credentials() {
+    clear
+    generate_links
+    echo ""
+    echo -e "    ${GREEN}${BOLD}ACTIVE CREDENTIALS & CONNECTION URIs${NC}"
+    echo ""
+    echo -e "    ${WHITE}${BOLD}SERVER ACCESS${NC}"
+    echo -e "      ${GRAY}Admin User :${NC} ${YELLOW}$ADMIN_USER${NC}"
+    echo -e "      ${GRAY}Admin Pass :${NC} ${YELLOW}$ADMIN_PASS${NC}"
+    echo ""
+    echo -e "    ${WHITE}${BOLD}AUXILIARY PROXIES${NC}"
+    echo -e "      ${GRAY}BadVPN UDPGW Port :${NC} ${YELLOW}7300${NC}"
+    echo -e "      ${GRAY}MicroSocks Port   :${NC} ${YELLOW}1080 (SOCKS5)${NC}"
+    echo ""
+    echo -e "    ${WHITE}${BOLD}XRAY PROTOCOL KEYS${NC}"
+    echo -e "      ${GRAY}UUID        :${NC} ${YELLOW}$UUID${NC}"
+    echo -e "      ${GRAY}Trojan Key :${NC} ${YELLOW}$TROJAN_PASSWORD${NC}"
+    echo ""
+    echo -e "    ${PURPLE}${BOLD}CLIENT URIs${NC}"
+    echo -e "      ${GRAY}VLESS WS TLS:${NC}\n      ${WHITE}$VLESS_LINK${NC}\n"
+    echo -e "      ${GRAY}VMESS WS TLS:${NC}\n      ${WHITE}$VMESS_LINK${NC}\n"
+    echo -e "      ${GRAY}TROJAN WS TLS:${NC}\n      ${WHITE}$TROJAN_LINK${NC}\n"
+    echo -e "    ${WHITE}${BOLD}CUSTOM HTTP PAYLOAD (SSH-WS)${NC}"
+    echo -e "      ${YELLOW}GET /ssh-ws HTTP/1.1[crlf]Host: $DOMAIN[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]${NC}"
+    echo ""
+    read -p "    Press [Enter] to return..."
+}
+
+manage_services() {
+    clear
+    echo ""
+    echo -e "    ${WHITE}${BOLD}CORE SERVICE STATUS${NC}"
+    echo ""
+    for srv in nginx xray sky-ws badvpn microsocks; do
+        if systemctl is-active --quiet "$srv"; then
+            printf "      %-12s :  ${GREEN}ONLINE${NC}\n" "$srv"
+        else
+            printf "      %-12s :  ${RED}OFFLINE${NC}\n" "$srv"
+        fi
+    done
+    echo ""
+    echo -e "      ${PURPLE}1)${NC} Restart All Services"
+    echo -e "      ${PURPLE}2)${NC} Return to Dashboard"
+    echo ""
+    read -p "    Select Option: " srv_opt
+    if [ "$srv_opt" == "1" ]; then
+        echo -e "\n    ${GRAY}Restarting infrastructure...${NC}"
+        systemctl restart nginx xray sky-ws badvpn microsocks
+        echo -e "    ${GREEN}✔ Services successfully reloaded.${NC}"
+        sleep 2
+    fi
+}
+
+change_domain() {
+    clear
+    echo ""
+    echo -e "    ${CYAN}${BOLD}CHANGE TARGET DOMAIN & RE-ISSUE AUTO-SSL${NC}"
+    echo -e "    ${GRAY}Current Domain:${NC} ${YELLOW}$DOMAIN${NC}"
+    echo ""
+    read -p "    Enter new domain name (e.g. sub.mydomain.com): " NEW_DOMAIN
     
-    # Generate Certificates
-    echo -e "${C_BLUE}🔐 Generating self-signed certificates...${C_RESET}"
-    if ! command -v openssl &>/dev/null; then
-        ff_pkg_install openssl >/dev/null 2>&1 || {
-            echo -e "${C_RED}❌ Failed to install openssl for ZiVPN certificate generation.${C_RESET}"
-            return
-        }
-    fi
-    
-    openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
-        -subj "/C=US/ST=California/L=Los Angeles/O=Example Corp/OU=IT Department/CN=zivpn" \
-        -keyout "$ZIVPN_KEY_FILE" -out "$ZIVPN_CERT_FILE" 2>/dev/null
-
-    if [ ! -f "$ZIVPN_CERT_FILE" ]; then
-        echo -e "${C_RED}❌ Failed to generate certificates.${C_RESET}"
+    if [[ ! "$NEW_DOMAIN" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        echo -e "    ${RED}Invalid domain syntax. Aborting operation.${NC}"
+        sleep 2
         return
     fi
+
+    read -p "    Update Cloudflare A Record for $NEW_DOMAIN? (y/N): " update_cf
+    if [[ "$update_cf" =~ ^[Yy]$ ]]; then
+        echo -e "\n    ${GRAY}Communicating with Cloudflare API...${NC}"
+        EXTRACTED_ROOT=$(echo "$NEW_DOMAIN" | awk -F'.' '{print $(NF-1)"."$NF}')
+        
+        if cf_upsert_dns "$NEW_DOMAIN" "$SERVER_IP" "$EXTRACTED_ROOT" "$CF_TOKEN"; then
+            echo -e "    ${GREEN}✔ Cloudflare DNS A record synchronized to ${SERVER_IP}!${NC}"
+        else
+            echo -e "    ${YELLOW}⚠ Could not automatically resolve Zone ID for $EXTRACTED_ROOT. Ensure DNS points manually.${NC}"
+        fi
+    fi
+
+    echo -e "\n    ${GRAY}Executing Certbot DNS-01 Verification Challenge...${NC}"
+    chmod 600 /etc/letsencrypt/cloudflare.ini
+    
+    certbot certonly \
+      --dns-cloudflare \
+      --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+      --dns-cloudflare-propagation-seconds 15 \
+      --non-interactive \
+      --agree-tos \
+      --register-unsafely-without-email \
+      -d "$NEW_DOMAIN" &>/tmp/certbot_menu.log
+
+    NEW_CERT="/etc/letsencrypt/live/$NEW_DOMAIN/fullchain.pem"
+    NEW_KEY="/etc/letsencrypt/live/$NEW_DOMAIN/privkey.pem"
+
+    if [ -f "$NEW_CERT" ] && [ -f "$NEW_KEY" ]; then
+        NEW_CERT_PATH="$NEW_CERT"
+        NEW_KEY_PATH="$NEW_KEY"
+        echo -e "    ${GREEN}✔ Trusted Let's Encrypt TLS Certificate Issued!${NC}"
+    else
+        echo -e "    ${YELLOW}⚠ Certbot DNS-01 failed. Fallback to Self-Signed SAN Certificate...${NC}"
+        SSL_DIR="/etc/sky-vpn/ssl"
+        FALLBACK_CERT="$SSL_DIR/fallback.crt"
+        FALLBACK_KEY="$SSL_DIR/fallback.key"
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout "$FALLBACK_KEY" -out "$FALLBACK_CERT" \
+            -subj "/C=US/ST=State/L=City/O=SkyVPN/CN=$NEW_DOMAIN" \
+            -addext "subjectAltName=DNS:$NEW_DOMAIN,IP:$SERVER_IP" &>/dev/null
+        NEW_CERT_PATH="$FALLBACK_CERT"
+        NEW_KEY_PATH="$FALLBACK_KEY"
+    fi
+
+    cp /etc/nginx/sites-available/proxy.conf /tmp/proxy.conf.bak
+
+    cat << NGINX_CONF > /etc/nginx/sites-available/proxy.conf
+server {
+    listen 80 default_server;
+    listen 443 ssl http2 default_server;
+    server_name $NEW_DOMAIN; 
+    ssl_certificate $NEW_CERT_PATH;
+    ssl_certificate_key $NEW_KEY_PATH;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    tcp_nodelay on;
+
+    location /ssh-ws { proxy_pass http://127.0.0.1:8880; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /vless-path { proxy_pass http://127.0.0.1:10000; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /vmess-path { proxy_pass http://127.0.0.1:10001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /trojan-path { proxy_pass http://127.0.0.1:10002; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location / { return 403; }
+}
+NGINX_CONF
+
+    if nginx -t &>/dev/null; then
+        sed -i "s/DOMAIN=.*/DOMAIN=\"$NEW_DOMAIN\"/g" /etc/sky-vpn.conf
+        sed -i "s|CERT_PATH=.*|CERT_PATH=\"$NEW_CERT_PATH\"|g" /etc/sky-vpn.conf
+        sed -i "s|KEY_PATH=.*|KEY_PATH=\"$NEW_KEY_PATH\"|g" /etc/sky-vpn.conf
+        source /etc/sky-vpn.conf
+        systemctl restart nginx
+        rm -f /tmp/proxy.conf.bak
+        echo -e "    ${GREEN}✔ System domain successfully changed to $NEW_DOMAIN!${NC}\n"
+    else
+        echo -e "    ${RED}✖ Nginx validation failed. Restoring previous configuration.${NC}\n"
+        mv /tmp/proxy.conf.bak /etc/nginx/sites-available/proxy.conf
+        systemctl restart nginx
+    fi
+    read -p "    Press [Enter] to return..."
+}
+
+change_passwords() {
+    clear
+    echo ""
+    echo -e "    ${CYAN}${BOLD}PASSWORD & CREDENTIAL MANAGEMENT${NC}"
+    echo -e "      ${PURPLE}1)${NC} Change Trojan Proxy Password"
+    echo -e "      ${PURPLE}2)${NC} Change System Admin User Password ($ADMIN_USER)"
+    echo -e "      ${PURPLE}3)${NC} Change Both Passwords"
+    echo -e "      ${PURPLE}0)${NC} Return to Dashboard"
+    echo ""
+    read -p "    Select Option: " pass_opt
+
+    case $pass_opt in
+        1)
+            read -p "    Enter new Trojan password: " NEW_TROJAN
+            if [ -n "$NEW_TROJAN" ]; then
+                jq --arg p "$NEW_TROJAN" '.inbounds[2].settings.clients[0].password = $p' /usr/local/etc/xray/config.json > /tmp/xray.json && mv /tmp/xray.json /usr/local/etc/xray/config.json
+                sed -i "s/TROJAN_PASSWORD=.*/TROJAN_PASSWORD=\"$NEW_TROJAN\"/g" /etc/sky-vpn.conf
+                source /etc/sky-vpn.conf
+                systemctl restart xray
+                echo -e "    ${GREEN}✔ Trojan password updated and Xray reloaded!${NC}"
+            fi
+            ;;
+        2)
+            read -p "    Enter new password for $ADMIN_USER: " NEW_ADMIN_PASS
+            if [ -n "$NEW_ADMIN_PASS" ]; then
+                echo "$ADMIN_USER:$NEW_ADMIN_PASS" | chpasswd
+                sed -i "s/ADMIN_PASS=.*/ADMIN_PASS=\"$NEW_ADMIN_PASS\"/g" /etc/sky-vpn.conf
+                source /etc/sky-vpn.conf
+                echo -e "    ${GREEN}✔ Admin user password updated!${NC}"
+            fi
+            ;;
+        3)
+            read -p "    Enter new Trojan password: " NEW_TROJAN
+            read -p "    Enter new password for $ADMIN_USER: " NEW_ADMIN_PASS
+            if [ -n "$NEW_TROJAN" ]; then
+                jq --arg p "$NEW_TROJAN" '.inbounds[2].settings.clients[0].password = $p' /usr/local/etc/xray/config.json > /tmp/xray.json && mv /tmp/xray.json /usr/local/etc/xray/config.json
+                sed -i "s/TROJAN_PASSWORD=.*/TROJAN_PASSWORD=\"$NEW_TROJAN\"/g" /etc/sky-vpn.conf
+                systemctl restart xray
+            fi
+            if [ -n "$NEW_ADMIN_PASS" ]; then
+                echo "$ADMIN_USER:$NEW_ADMIN_PASS" | chpasswd
+                sed -i "s/ADMIN_PASS=.*/ADMIN_PASS=\"$NEW_ADMIN_PASS\"/g" /etc/sky-vpn.conf
+            fi
+            source /etc/sky-vpn.conf
+            echo -e "    ${GREEN}✔ Credentials updated successfully!${NC}"
+            ;;
+        0) return ;;
+        *) echo -e "    ${RED}Invalid selection${NC}" ;;
+    esac
+    sleep 2
+}
+
+regenerate_credentials() {
+    clear
+    echo ""
+    echo -e "    ${RED}${BOLD}SECURITY: REGENERATE PROTOCOL UUID${NC}"
+    echo -e "    ${GRAY}This will update your VLESS/VMESS user ID.${NC}"
+    echo ""
+    read -p "    Are you sure you want to proceed? (y/N): " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        NEW_UUID=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)
+        
+        jq --arg u "$NEW_UUID" '.inbounds[0].settings.clients[0].id = $u | .inbounds[1].settings.clients[0].id = $u' /usr/local/etc/xray/config.json > /tmp/xray.json && mv /tmp/xray.json /usr/local/etc/xray/config.json
+        sed -i "s/UUID=.*/UUID=\"$NEW_UUID\"/g" /etc/sky-vpn.conf
+        
+        source /etc/sky-vpn.conf
+        systemctl restart xray
+        
+        echo -e "\n    ${GREEN}✔ UUID successfully regenerated and applied.${NC}"
+        echo -e "    ${GRAY}New UUID:${NC} ${YELLOW}$UUID${NC}"
+        sleep 3
+    fi
+}
+
+renew_ssl() {
+    clear
+    echo ""
+    echo -e "    ${CYAN}${BOLD}FORCE RENEW CURRENT SSL CERTIFICATE${NC}"
+    echo -e "    ${GRAY}Executing Let's Encrypt DNS-01 challenge for $DOMAIN...${NC}"
+    echo ""
+    
+    chmod 600 /etc/letsencrypt/cloudflare.ini
+    
+    certbot certonly \
+      --dns-cloudflare \
+      --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+      --dns-cloudflare-propagation-seconds 15 \
+      --non-interactive \
+      --agree-tos \
+      --register-unsafely-without-email \
+      --force-renewal \
+      -d "$DOMAIN"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "\n    ${GREEN}✔ Certificate successfully renewed!${NC}"
+        sed -i "s|CERT_PATH=.*|CERT_PATH=\"/etc/letsencrypt/live/$DOMAIN/fullchain.pem\"|g" /etc/sky-vpn.conf
+        sed -i "s|KEY_PATH=.*|KEY_PATH=\"/etc/letsencrypt/live/$DOMAIN/privkey.pem\"|g" /etc/sky-vpn.conf
+        systemctl reload nginx
+    else
+        echo -e "\n    ${RED}✖ Renewal failed. Existing certificate remains untouched.${NC}"
+    fi
+    echo ""
+    read -p "    Press [Enter] to return..."
+}
+
+view_logs() {
+    clear
+    echo ""
+    echo -e "    ${WHITE}${BOLD}SYSTEM LOGS MONITOR${NC}"
+    echo -e "      ${PURPLE}1)${NC} Xray Core Logs"
+    echo -e "      ${PURPLE}2)${NC} Nginx Access Logs"
+    echo -e "      ${PURPLE}3)${NC} Nginx Error Logs"
+    echo -e "      ${PURPLE}4)${NC} Node WS Multiplexer Logs"
+    echo -e "      ${PURPLE}5)${NC} BadVPN UDPGW Logs"
+    echo -e "      ${PURPLE}6)${NC} MicroSocks Logs"
+    echo -e "      ${PURPLE}0)${NC} Return to Dashboard"
+    echo ""
+    read -p "    Select Log Stream: " log_opt
+    echo -e "    ${GRAY}(Press CTRL+C to exit log view)${NC}\n"
+    case $log_opt in
+        1) journalctl -u xray -f --lines=30 ;;
+        2) tail -f /var/log/nginx/access.log ;;
+        3) tail -f /var/log/nginx/error.log ;;
+        4) journalctl -u sky-ws -f --lines=30 ;;
+        5) journalctl -u badvpn -f --lines=30 ;;
+        6) journalctl -u microsocks -f --lines=30 ;;
+        *) return ;;
+    esac
+}
+
+while true; do
+    show_dashboard
+    read -p "    Select Module [0-7]: " main_opt
+    case $main_opt in
+        1) view_credentials ;;
+        2) manage_services ;;
+        3) change_domain ;;
+        4) change_passwords ;;
+        5) regenerate_credentials ;;
+        6) renew_ssl ;;
+        7) view_logs ;;
+        0) clear; exit 0 ;;
+        *) echo -e "    ${RED}Invalid selection${NC}"; sleep 1 ;;
+    esac
+done
+CLI_MENU
+
+chmod +x /usr/local/bin/sky-menu
+echo -e "      ${GREEN}✔${NC}  ${WHITE}Management Interface Deployed to /usr/local/bin/sky-menu${NC}"
+echo ""
+echo -e "    ${GREEN}${BOLD}DEPLOYMENT COMPLETE${NC}"
+echo -e "    ${WHITE}Execute command ${CYAN}sky-menu${WHITE} to access the control panel.${NC}"
+echo ""
