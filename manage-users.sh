@@ -157,19 +157,23 @@ xray_list_clients() {
 # MENU
 # ------------------------------------------------------------------------------
 
+show_menu() {
+  echo
+  echo -e "${CYAN}==================== Account Manager ====================${NC}"
+  echo " 1) Create SSH user"
+  echo " 2) Delete SSH user"
+  echo " 3) List SSH users"
+  echo " 4) Create Xray client"
+  echo " 5) Delete Xray client"
+  echo " 6) List Xray clients"
+  echo " 0) Exit"
+  echo -e "${CYAN}===========================================================${NC}"
+}
+
 main_menu() {
+  show_menu
   while true; do
-    echo
-    echo -e "${CYAN}==================== Account Manager ====================${NC}"
-    echo " 1) Create SSH user"
-    echo " 2) Delete SSH user"
-    echo " 3) List SSH users"
-    echo " 4) Create Xray client"
-    echo " 5) Delete Xray client"
-    echo " 6) List Xray clients"
-    echo " 0) Exit"
-    echo -e "${CYAN}===========================================================${NC}"
-    read -rp "Choose an option: " CHOICE
+    read -rp "Choose an option (type 'menu' to redisplay): " CHOICE
 
     case "$CHOICE" in
       1) ssh_create_user ;;
@@ -178,10 +182,16 @@ main_menu() {
       4) xray_create_client ;;
       5) xray_delete_client ;;
       6) xray_list_clients ;;
+      menu|m) show_menu ;;
       0) log "Bye."; exit 0 ;;
       *) err "Invalid option." ;;
     esac
   done
 }
 
-main_menu
+# Running `./manage-users.sh menu` (or with no args) both land on the menu —
+# 'menu' is accepted explicitly so it's clear that's how you get back to it.
+case "${1:-}" in
+  menu|"") main_menu ;;
+  *) err "Unknown argument: $1"; echo "Usage: sudo ./manage-users.sh [menu]"; exit 1 ;;
+esac
