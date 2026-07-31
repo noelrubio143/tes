@@ -1,0 +1,68 @@
+# --- ZiVPN Installation Logic ---
+install_zivpn() {
+    clear; show_banner
+    echo -e "${C_BOLD}${C_PURPLE}--- 🚀 Installing ZiVPN (UDP/VPN) ---${C_RESET}"
+    
+    if [ -f "$ZIVPN_SERVICE_FILE" ]; then
+        echo -e "\n${C_YELLOW}ℹ️ ZiVPN is already installed.${C_RESET}"
+        return
+    fi
+
+    if [ ! -f "$BADVPN_SERVICE_FILE" ]; then
+        echo -e "\n${C_YELLOW}⚠️ ZiVPN requires the badvpn (udpgw) backend to provide internet access.${C_RESET}"
+        echo -e "${C_GREEN}📦 Automatically installing badvpn backend...${C_RESET}"
+        sleep 2
+        install_badvpn
+        clear; show_banner
+        echo -e "${C_BOLD}${C_PURPLE}--- 🚀 Resuming ZiVPN Installation ---${C_RESET}"
+    fi
+
+    check_and_free_ports 5667 || return
+    check_and_open_firewall_port 5667 udp || return
+    check_and_open_firewall_port_range "6000:19999" udp || return
+
+    echo -e "\n${C_GREEN}⚙️ Checking system architecture...${C_RESET}"
+    local arch=$(uname -m)
+    local zivpn_url=""
+    
+    if [[ "$arch" == "x86_64" ]]; then
+        zivpn_url="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64"
+        echo -e "${C_BLUE}ℹ️ Detected AMD64/x86_64 architecture.${C_RESET}"
+    elif [[ "$arch" == "aarch64" ]]; then
+        zivpn_url="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-arm64"
+        echo -e "${C_BLUE}ℹ️ Detected ARM64 architecture.${C_RESET}"
+    elif [[ "$arch" == "armv7l" || "$arch" == "arm" ]]; then
+         zivpn_url="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-arm"
+         echo -e "${C_BLUE}ℹ️ Detected ARM architecture.${C_RESET}"
+    else
+        echo -e "${C_RED}❌ Unsupported architecture: $arch${C_RESET}"
+        return
+    fi
+
+    echo -e "\n${C_GREEN}📦 Downloading ZiVPN binary...${C_RESET}"
+    if ! wget -q --show-progress -O "$ZIVPN_BIN" "$zivpn_url"; then
+        echo -e "${C_RED}❌ Download failed. Check internet connection.${C_RESET}"
+        return
+    fi
+    chmod +x "$ZIVPN_BIN"
+
+    echo -e "\n${C_GREEN}⚙️ Configuring ZIVPN...${C_RESET}"
+    mkdir -p "$ZIVPN_DIR"
+    
+    # Generate Certificates
+    echo -e "${C_BLUE}🔐 Generating self-signed certificates...${C_RESET}"
+    if ! command -v openssl &>/dev/null; then
+        ff_pkg_install openssl >/dev/null 2>&1 || {
+            echo -e "${C_RED}❌ Failed to install openssl for ZiVPN certificate generation.${C_RESET}"
+            return
+        }
+    fi
+    
+    openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
+        -subj "/C=US/ST=California/L=Los Angeles/O=Example Corp/OU=IT Department/CN=zivpn" \
+        -keyout "$ZIVPN_KEY_FILE" -out "$ZIVPN_CERT_FILE" 2>/dev/null
+
+    if [ ! -f "$ZIVPN_CERT_FILE" ]; then
+        echo -e "${C_RED}❌ Failed to generate certificates.${C_RESET}"
+        return
+    fi
