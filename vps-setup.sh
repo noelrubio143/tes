@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # ==============================================================================
-#  Debian VPS All-In-One Setup Script
-#  Stack: Nginx + PHP-FPM + Let's Encrypt SSL + UFW Firewall + Fail2Ban + Xray
+#  Debian VPS All-In-One Setup Script (IP-only, self-signed TLS)
+#  Stack: Nginx + PHP-FPM + Self-Signed SSL + UFW Firewall + Fail2Ban + Xray
 #  Tested on: Debian 11 / 12
 # ==============================================================================
 #
@@ -10,19 +10,25 @@
 #    1. Copy this script to your VPS (as root or a sudo user)
 #    2. chmod +x vps-setup.sh
 #    3. sudo ./vps-setup.sh
-#       (you'll be prompted to enter your domain and email interactively)
+#       (public IP is auto-detected; no domain or email needed)
 #
 #  WHAT IT DOES:
 #    - Updates system packages
 #    - Sets up UFW firewall (allows SSH, HTTP, HTTPS only)
 #    - Installs and configures Fail2Ban (brute-force protection)
 #    - Installs Nginx + PHP-FPM (latest available PHP version)
-#    - Creates a sample site at /var/www/yourdomain.com
-#    - Issues a free SSL certificate via Let's Encrypt (Certbot)
-#    - Sets up automatic SSL renewal
+#    - Creates a sample site at /var/www/site
+#    - Generates a self-signed TLS certificate for the server's public IP
 #    - Installs Xray (VLESS + WebSocket + TLS), reverse-proxied behind Nginx
-#      on the same 443 port and domain/cert (path-based routing so the
-#      website and Xray share the port without conflict)
+#      on the same 443 port, sharing the same self-signed cert
+#
+#  NOTE ON SELF-SIGNED + IP-ONLY TLS:
+#    Browsers and most clients will show a trust warning / require you to
+#    manually accept or pin the certificate, since it isn't issued by a
+#    public CA. This setup is intended for personal/private use (your own
+#    devices connecting to your own server) — not for public-facing sites,
+#    and it does not disguise itself as ordinary traffic to outside
+#    observers the way a domain + real CA cert would.
 #
 # ==============================================================================
 
@@ -44,21 +50,33 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-echo
-read -p "Enter your domain (e.g. example.com): " DOMAIN
-until [[ -n "$DOMAIN" ]]; do
-  read -p "Domain cannot be empty. Enter your domain: " DOMAIN
+# ==============================================================================
+# 0. DETECT PUBLIC IP
+# ==============================================================================
+log "Detecting public IP address..."
+apt-get update -y -qq
+apt-get install -y -qq curl >/dev/null
+
+SERVER_IP=""
+for svc in "https://ifconfig.me" "https://api.ipify.org" "https://icanhazip.com"; do
+  SERVER_IP=$(curl -fsSL --max-time 5 "$svc" 2>/dev/null | tr -d '[:space:]' || true)
+  if [[ "$SERVER_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    break
+  fi
+  SERVER_IP=""
 done
 
-read -p "Enter your email (for SSL registration, e.g. admin@example.com): " EMAIL
-until [[ -n "$EMAIL" ]]; do
-  read -p "Email cannot be empty. Enter your email: " EMAIL
-done
+if [[ -z "$SERVER_IP" ]]; then
+  err "Could not auto-detect public IP."
+  read -p "Enter your server's public IP manually: " SERVER_IP
+  until [[ "$SERVER_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; do
+    read -p "That doesn't look like a valid IPv4 address. Enter it again: " SERVER_IP
+  done
+fi
 
-WEBROOT="/var/www/${DOMAIN}"
+WEBROOT="/var/www/site"
 
-log "Domain: ${DOMAIN}"
-log "Email:  ${EMAIL}"
+log "Detected public IP: ${SERVER_IP}"
 log "Webroot: ${WEBROOT}"
 echo
 read -p "Continue with these settings? (y/n): " CONFIRM
@@ -74,7 +92,7 @@ log "Updating system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get upgrade -y
-apt-get install -y curl wget gnupg2 ca-certificates lsb-release apt-transport-https software-properties-common unzip
+apt-get install -y wget gnupg2 ca-certificates lsb-release apt-transport-https software-properties-common unzip openssl
 
 # ==============================================================================
 # 2. FIREWALL (UFW)
@@ -134,7 +152,24 @@ systemctl enable "php${PHP_VERSION}-fpm"
 systemctl start "php${PHP_VERSION}-fpm"
 
 # ==============================================================================
-# 6. SAMPLE SITE + NGINX SERVER BLOCK
+# 6. SELF-SIGNED TLS CERTIFICATE (for the server's IP)
+# ==============================================================================
+log "Generating self-signed TLS certificate for ${SERVER_IP}..."
+CERT_DIR="/etc/nginx/ssl"
+mkdir -p "${CERT_DIR}"
+
+openssl req -x509 -nodes -newkey rsa:2048 \
+  -keyout "${CERT_DIR}/selfsigned.key" \
+  -out "${CERT_DIR}/selfsigned.crt" \
+  -days 3650 \
+  -subj "/CN=${SERVER_IP}" \
+  -addext "subjectAltName=IP:${SERVER_IP}"
+
+chmod 600 "${CERT_DIR}/selfsigned.key"
+log "Self-signed certificate created (valid 10 years): ${CERT_DIR}/selfsigned.crt"
+
+# ==============================================================================
+# 7. SAMPLE SITE + NGINX SERVER BLOCK (HTTP -> HTTPS, IP-based)
 # ==============================================================================
 log "Creating webroot at ${WEBROOT}..."
 mkdir -p "${WEBROOT}"
@@ -142,17 +177,28 @@ chown -R www-data:www-data "${WEBROOT}"
 
 cat > "${WEBROOT}/index.php" <<EOF
 <?php
-echo "<h1>It works! (${DOMAIN})</h1>";
+echo "<h1>It works! (${SERVER_IP})</h1>";
 echo "<p>PHP version: " . phpversion() . "</p>";
 EOF
 chown www-data:www-data "${WEBROOT}/index.php"
 
 log "Writing Nginx server block..."
-cat > "/etc/nginx/sites-available/${DOMAIN}" <<EOF
+cat > "/etc/nginx/sites-available/site" <<EOF
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAIN} www.${DOMAIN};
+    server_name ${SERVER_IP};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name ${SERVER_IP};
+
+    ssl_certificate     ${CERT_DIR}/selfsigned.crt;
+    ssl_certificate_key ${CERT_DIR}/selfsigned.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
 
     root ${WEBROOT};
     index index.php index.html index.htm;
@@ -174,7 +220,7 @@ server {
 }
 EOF
 
-ln -sf "/etc/nginx/sites-available/${DOMAIN}" "/etc/nginx/sites-enabled/${DOMAIN}"
+ln -sf "/etc/nginx/sites-available/site" "/etc/nginx/sites-enabled/site"
 
 # Remove default site if present, to avoid conflicts
 rm -f /etc/nginx/sites-enabled/default
@@ -183,52 +229,19 @@ nginx -t
 systemctl reload nginx
 
 # ==============================================================================
-# 7. SSL VIA LET'S ENCRYPT (CERTBOT)
-# ==============================================================================
-log "Installing Certbot..."
-apt-get install -y certbot python3-certbot-nginx
-
-log "Requesting SSL certificate for ${DOMAIN} and www.${DOMAIN}..."
-warn "Make sure both DNS A records point to this server's IP BEFORE this step, or it will fail."
-
-set +e
-certbot --nginx \
-  -d "${DOMAIN}" -d "www.${DOMAIN}" \
-  --non-interactive --agree-tos -m "${EMAIL}" --redirect
-CERTBOT_STATUS=$?
-set -e
-
-if [[ $CERTBOT_STATUS -ne 0 ]]; then
-  warn "Certbot failed. This is usually a DNS issue (A record not pointing here yet)."
-  warn "Once DNS is correct, re-run manually with:"
-  warn "  certbot --nginx -d ${DOMAIN} -d www.${DOMAIN} --agree-tos -m ${EMAIL}"
-else
-  log "SSL certificate issued successfully."
-  # Ensure auto-renewal timer is active
-  systemctl enable certbot.timer
-  systemctl start certbot.timer
-  log "Auto-renewal enabled (certbot.timer)."
-fi
-
-# ==============================================================================
 # 8. XRAY (VLESS + WebSocket + TLS, behind Nginx on port 443)
 # ==============================================================================
-XRAY_INSTALLED=0
-XRAY_UUID=""
-XRAY_WS_PATH=""
+log "Installing Xray..."
 
-if [[ $CERTBOT_STATUS -eq 0 ]]; then
-  log "Installing Xray..."
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 
-  bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+XRAY_UUID=$(cat /proc/sys/kernel/random/uuid)
+XRAY_WS_PATH="/$(tr -dc 'a-z0-9' </dev/urandom | head -c 10)-ws"
+XRAY_PORT=10000
 
-  XRAY_UUID=$(cat /proc/sys/kernel/random/uuid)
-  XRAY_WS_PATH="/$(tr -dc 'a-z0-9' </dev/urandom | head -c 10)-ws"
-  XRAY_PORT=10000
-
-  log "Writing Xray config..."
-  mkdir -p /usr/local/etc/xray
-  cat > /usr/local/etc/xray/config.json <<EOF
+log "Writing Xray config..."
+mkdir -p /usr/local/etc/xray
+cat > /usr/local/etc/xray/config.json <<EOF
 {
   "log": {
     "loglevel": "warning"
@@ -263,18 +276,13 @@ if [[ $CERTBOT_STATUS -eq 0 ]]; then
 }
 EOF
 
-  systemctl enable xray
-  systemctl restart xray
-  XRAY_INSTALLED=1
+systemctl enable xray
+systemctl restart xray
 
-  log "Adding Xray WebSocket proxy block into Nginx config (behind existing TLS)..."
-  # Certbot already added a listen 443 ssl server block for $DOMAIN.
-  # We inject a location block for the Xray WS path into that same server block,
-  # right before its closing brace, so it shares the domain + certificate.
-  NGINX_CONF="/etc/nginx/sites-available/${DOMAIN}"
+log "Adding Xray WebSocket proxy block into Nginx config (behind the self-signed cert)..."
+NGINX_CONF="/etc/nginx/sites-available/site"
 
-  # Build the location block to inject
-  XRAY_LOCATION=$(cat <<EOF
+XRAY_LOCATION=$(cat <<EOF
     location ${XRAY_WS_PATH} {
         proxy_redirect off;
         proxy_pass http://127.0.0.1:${XRAY_PORT};
@@ -288,30 +296,26 @@ EOF
 EOF
 )
 
-  # Insert the location block into the LAST closing "}" of the file
-  # (that's the end of the SSL server block Certbot created)
-  awk -v block="$XRAY_LOCATION" '
-    { lines[NR] = $0 }
-    END {
-      last_brace = 0
-      for (i = NR; i >= 1; i--) {
-        if (lines[i] ~ /^}/) { last_brace = i; break }
-      }
-      for (i = 1; i <= NR; i++) {
-        if (i == last_brace) { print block }
-        print lines[i]
-      }
+# Insert the location block into the LAST closing "}" of the file
+# (the HTTPS server block, since it comes after the HTTP redirect block)
+awk -v block="$XRAY_LOCATION" '
+  { lines[NR] = $0 }
+  END {
+    last_brace = 0
+    for (i = NR; i >= 1; i--) {
+      if (lines[i] ~ /^}/) { last_brace = i; break }
     }
-  ' "$NGINX_CONF" > "${NGINX_CONF}.tmp" && mv "${NGINX_CONF}.tmp" "$NGINX_CONF"
+    for (i = 1; i <= NR; i++) {
+      if (i == last_brace) { print block }
+      print lines[i]
+    }
+  }
+' "$NGINX_CONF" > "${NGINX_CONF}.tmp" && mv "${NGINX_CONF}.tmp" "$NGINX_CONF"
 
-  nginx -t
-  systemctl reload nginx
+nginx -t
+systemctl reload nginx
 
-  log "Xray installed and wired behind Nginx."
-else
-  warn "Skipping Xray setup: SSL certificate was not issued (Xray needs a valid cert + working domain)."
-  warn "Fix DNS, re-run certbot successfully, then re-run this script or install Xray manually."
-fi
+log "Xray installed and wired behind Nginx."
 
 # ==============================================================================
 # 9. SUMMARY
@@ -321,33 +325,29 @@ log "=========================================="
 log " Setup complete!"
 log "=========================================="
 echo " Webroot:      ${WEBROOT}"
-echo " Nginx config: /etc/nginx/sites-available/${DOMAIN}"
+echo " Nginx config: /etc/nginx/sites-available/site"
 echo " PHP version:  ${PHP_VERSION}"
 echo " Firewall:     ufw status"
 echo " Fail2Ban:     fail2ban-client status sshd"
-if [[ $CERTBOT_STATUS -eq 0 ]]; then
-  echo " Site:         https://${DOMAIN}"
-else
-  echo " Site:         http://${DOMAIN}  (SSL pending - fix DNS and re-run certbot)"
-fi
+echo " TLS cert:     ${CERT_DIR}/selfsigned.crt (self-signed, 10yr, CN=${SERVER_IP})"
+echo " Site:         https://${SERVER_IP}  (browser will warn: self-signed cert)"
 
-if [[ $XRAY_INSTALLED -eq 1 ]]; then
-  echo
-  log "=========================================="
-  log " Xray (VLESS + WS + TLS) connection info"
-  log "=========================================="
-  echo " Address:      ${DOMAIN}"
-  echo " Port:         443"
-  echo " UUID:         ${XRAY_UUID}"
-  echo " Network:      ws"
-  echo " Path:         ${XRAY_WS_PATH}"
-  echo " TLS:          on"
-  echo " Service:      systemctl status xray"
-  echo " Config file:  /usr/local/etc/xray/config.json"
-  echo
-  echo " vless://${XRAY_UUID}@${DOMAIN}:443?encryption=none&security=tls&type=ws&host=${DOMAIN}&path=${XRAY_WS_PATH}#${DOMAIN}"
-else
-  echo " Xray:         not installed (SSL cert was required first)"
-fi
+echo
+log "=========================================="
+log " Xray (VLESS + WS + TLS) connection info"
+log "=========================================="
+echo " Address:      ${SERVER_IP}"
+echo " Port:         443"
+echo " UUID:         ${XRAY_UUID}"
+echo " Network:      ws"
+echo " Path:         ${XRAY_WS_PATH}"
+echo " TLS:          on (self-signed — client must enable 'allow insecure' / skip cert verify)"
+echo " Service:      systemctl status xray"
+echo " Config file:  /usr/local/etc/xray/config.json"
+echo
+echo " vless://${XRAY_UUID}@${SERVER_IP}:443?encryption=none&security=tls&type=ws&host=${SERVER_IP}&path=${XRAY_WS_PATH}&allowInsecure=1#${SERVER_IP}"
+echo
+warn "Self-signed cert: clients (browsers, Xray/V2Ray apps) must explicitly trust"
+warn "or bypass certificate verification, since no public CA issued this cert."
 echo
 log "Done."
