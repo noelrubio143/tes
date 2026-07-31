@@ -9,7 +9,8 @@
 #  USAGE:
 #    1. Copy this script to your VPS (as root or a sudo user)
 #    2. chmod +x vps-setup.sh
-#    3. sudo ./vps-setup.sh yourdomain.com you@example.com
+#    3. sudo ./vps-setup.sh
+#       (you'll be prompted to enter your domain and email interactively)
 #
 #  WHAT IT DOES:
 #    - Updates system packages
@@ -43,14 +44,17 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-if [[ $# -lt 2 ]]; then
-  err "Usage: $0 <domain.com> <email@example.com>"
-  echo "Example: $0 example.com admin@example.com"
-  exit 1
-fi
+echo
+read -p "Enter your domain (e.g. example.com): " DOMAIN
+until [[ -n "$DOMAIN" ]]; do
+  read -p "Domain cannot be empty. Enter your domain: " DOMAIN
+done
 
-DOMAIN="$1"
-EMAIL="$2"
+read -p "Enter your email (for SSL registration, e.g. admin@example.com): " EMAIL
+until [[ -n "$EMAIL" ]]; do
+  read -p "Email cannot be empty. Enter your email: " EMAIL
+done
+
 WEBROOT="/var/www/${DOMAIN}"
 
 log "Domain: ${DOMAIN}"
