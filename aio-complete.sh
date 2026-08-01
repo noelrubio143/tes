@@ -20,8 +20,8 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Variables
-DOMAIN="${1:-example.com}"
-EMAIL="${2:-admin@example.com}"
+DOMAIN="${1:ambersvpn.shop}"
+EMAIL="${2:jieromvilla23@gmail.com}"
 SSH_PORT="22"
 WS_PORT="8080"
 NGINX_PORT_HTTP="80"
